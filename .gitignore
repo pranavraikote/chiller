@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local env / secrets
+.env
+*.env
+
+# Runtime output
+logs/
+logs*/
+*.log
+
+# User-supplied model + corpus (keep out of the repo)
+adapter/
+adapters/
+rag/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

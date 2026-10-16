@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CHiLLER | DSV</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --su-blue:   #002F5F;
+      --su-mid:    #2563A8;
+      --su-light:  #EAF0F9;
+      --text:      #1a1a2e;
+      --muted:     #6b7280;
+      --border:    #dde1e7;
+      --bg:        #f4f6fb;
+      --white:     #ffffff;
+      --green:     #15803d;
+      --green-bg:  #f0fdf4;
+      --green-bd:  #86efac;
+      --amber:     #a16207;
+      --amber-bg:  #fffbeb;
+      --amber-bd:  #fde68a;
+      --red:       #b91c1c;
+      --red-bg:    #fef2f2;
+      --blue-bd:   #a5b4fc;
+      --blue-bg:   #eff6ff;
+      --blue-txt:  #1e40af;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .site-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: var(--su-blue);
+      padding: 0.9rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1.4rem;
+    }
+    .site-header img {
+      height: 38px;
+      filter: brightness(0) invert(1);
+    }
+    .site-header-text h1 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 0.01em;
+    }
+    .site-header-text p {
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.65);
+      margin-top: 0.1rem;
+    }
+
+    /* ── Status bar ── */
+    .status-bar {
+      position: fixed;
+      top: 64px;
+      left: 0;
+      right: 0;
+      z-index: 99;
+      background: var(--su-light);
+      border-bottom: 1px solid var(--border);
+      padding: 0.45rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #d1d5db;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .status-dot.ready  { background: #22c55e; }
+    .status-dot.shadow { background: #f59e0b; }
+    .status-dot.busy   { background: #ef4444; }
+
+    /* ── Main layout ── */
+    .main {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 2rem 1rem 3rem;
+      margin-top: 100px;
+      transition: max-width 0.45s ease;
+    }
+    .main.wide { max-width: 1180px; }
+
+    /* ── Workspace: single column until attribution/feedback slides the evidence column in ── */
+    .workspace { display: flex; gap: 1.4rem; align-items: flex-start; }
+    .col { min-width: 0; }
+    .col-left { flex: 1 1 auto; display: flex; flex-direction: column; gap: 1.4rem; min-width: 0; }
+    .col-right {
+      flex: 0 1 auto; max-width: 0; opacity: 0; transform: translateX(28px);
+      overflow: hidden;
+      transition: max-width 0.45s ease, opacity 0.4s ease, transform 0.45s ease;
+    }
+    .workspace.show-evidence .col-right { max-width: 50%; opacity: 1; transform: none; }
+    .col-right .panel { margin-top: 0; margin-bottom: 1.4rem; }
+    @media (max-width: 860px) {
+      .workspace { flex-direction: column; }
+      .workspace.show-evidence .col-right { max-width: 100%; }
+    }
+
+    .intro {
+      margin-bottom: 1.6rem;
+    }
+    .intro h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--su-blue);
+      margin-bottom: 0.4rem;
+    }
+    .intro p {
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 640px;
+    }
+
+    /* ── Examples ── */
+    .examples {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.4rem;
+      align-items: center;
+    }
+    .examples-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .ex-btn {
+      background: var(--white);
+      border: 1px solid var(--border);
+      color: var(--su-mid);
+      border-radius: 20px;
+      padding: 0.28rem 0.85rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .ex-btn:hover { background: var(--su-light); border-color: var(--su-mid); }
+
+    /* ── Card ── */
+    .card {
+      background: var(--white);
+      border-radius: 12px;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.07);
+      padding: 1.6rem;
+      margin-bottom: 1.2rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 0.3rem;
+    }
+
+    textarea, input[type="number"] {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 0.85rem;
+      font-size: 0.9rem;
+      font-family: inherit;
+      color: var(--text);
+      background: #fafbfc;
+      resize: vertical;
+      transition: border-color 0.15s;
+    }
+    textarea:focus, input[type="number"]:focus {
+      outline: none;
+      border-color: var(--su-mid);
+      background: var(--white);
+    }
+
+    .row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .row > * { flex: 1; min-width: 140px; }
+
+    .slider-wrap input[type="range"] {
+      width: 100%;
+      accent-color: var(--su-mid);
+      margin-top: 0.3rem;
+    }
+    .slider-ticks {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 0.1rem;
+    }
+
+    /* ── Buttons ── */
+    .btn-primary {
+      width: 100%;
+      padding: 0.75rem;
+      background: var(--su-blue);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 0.6rem;
+      transition: background 0.15s, opacity 0.15s;
+      letter-spacing: 0.02em;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--su-mid); }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.45rem 1rem;
+      background: var(--white);
+      color: var(--su-mid);
+      border: 1.5px solid var(--su-mid);
+      border-radius: 7px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-secondary:hover:not(:disabled) { background: var(--su-light); }
+    .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-secondary.loading { opacity: 0.6; }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: none;
+      text-align: center;
+      padding: 1.2rem;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+    .spin-ring {
+      display: inline-block;
+      width: 20px; height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--su-mid);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.5rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error ── */
+    .error-msg {
+      display: none;
+      background: var(--red-bg);
+      border: 1px solid #fca5a5;
+      color: var(--red);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.88rem;
+      margin-top: 0.8rem;
+    }
+
+    /* ── Results ── */
+    .results { display: none; }
+
+    .result-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .result-box {
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      text-align: center;
+    }
+    .result-box .val {
+      font-size: 2.1rem;
+      font-weight: 800;
+      color: var(--su-blue);
+    }
+    .result-box .lbl {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-top: 0.2rem;
+    }
+
+    .conf-bar-wrap {
+      margin-top: 0.5rem;
+      background: var(--border);
+      border-radius: 99px;
+      height: 5px;
+      overflow: hidden;
+    }
+    .conf-bar {
+      height: 100%;
+      border-radius: 99px;
+      background: var(--su-mid);
+      transition: width 0.5s ease;
+    }
+
+    .decision {
+      border-radius: 8px;
+      padding: 0.9rem 1.2rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .decision.accepted { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-bd); }
+    .decision.flagged  { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-bd); }
+
+    /* ── Progressive action buttons ── */
+    .action-row {
+      display: none;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 0.4rem;
+    }
+
+    /* ── Attribution panel ── */
+    .panel {
+      display: none;
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      line-height: 1.9;
+    }
+    .panel.attr {
+      background: var(--amber-bg);
+      border: 1px solid var(--amber-bd);
+      color: var(--text);
+    }
+    .panel.feedback {
+      background: var(--green-bg);
+      border: 1px solid var(--green-bd);
+      color: #14532d;
+    }
+    .panel-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.6rem;
+    }
+    .panel.attr      .panel-label { color: var(--amber); }
+    .panel.feedback  .panel-label { color: var(--green); }
+
+    .panel-sub {
+      font-size: 0.72rem;
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--muted);
+      margin-left: 0.4rem;
+    }
+
+    .attr-legend {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 0.8rem;
+      font-size: 0.73rem;
+      color: var(--muted);
+    }
+    .attr-legend .bar {
+      width: 80px; height: 9px; border-radius: 3px;
+      background: linear-gradient(to right, #fff, #fde68a, #f97316, #dc2626);
+    }
+
+    .attr-tok {
+      padding: 1px 3px;
+      border-radius: 3px;
+      cursor: default;
+    }
+
+    /* ── Grounded feedback ── */
+    .fb-badge {
+      display: inline-block;
+      font-size: 0.66rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 0.12rem 0.5rem; border-radius: 99px; margin-left: 0.5rem;
+      vertical-align: middle;
+    }
+    .fb-badge.grounded   { background: var(--green-bd); color: #14532d; }
+    .fb-badge.ungrounded { background: var(--amber-bd); color: var(--amber); }
+    .fb-text { margin-bottom: 0.7rem; }
+    .cite-chip {
+      display: inline-block; background: var(--su-blue); color: #fff;
+      font-size: 0.68rem; font-weight: 700; padding: 0.04rem 0.4rem;
+      border-radius: 4px; white-space: nowrap;
+    }
+    .sources-head {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--green); margin: 0.7rem 0 0.45rem;
+    }
+    .excerpt {
+      border-left: 3px solid var(--green-bd);
+      background: rgba(255,255,255,0.65);
+      padding: 0.5rem 0.7rem; margin-bottom: 0.5rem;
+      border-radius: 0 6px 6px 0; font-size: 0.82rem; line-height: 1.5;
+    }
+    .excerpt.cited { border-left-color: var(--su-blue); }
+    .excerpt.dim   { opacity: 0.55; }
+    .excerpt .ex-label { font-weight: 700; color: var(--su-blue); font-size: 0.72rem; }
+    .excerpt .ex-score { color: var(--muted); font-weight: 400; font-size: 0.7rem; margin-left: 0.4rem; }
+    .excerpt .ex-text  { color: var(--text); margin-top: 0.2rem; }
+
+    /* ── Correction widget ── */
+    .correction-box {
+      margin-top: 1.2rem;
+      border-top: 1px solid var(--border);
+      padding-top: 1rem;
+    }
+    .correction-box .correction-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 0.6rem;
+    }
+    .correction-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .correction-row input[type="number"] {
+      width: 80px;
+      font-size: 0.9rem;
+    }
+    .correction-row input[type="text"] {
+      flex: 1;
+      min-width: 180px;
+      font-size: 0.88rem;
+      padding: 0.55rem 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fafbfc;
+      font-family: inherit;
+      color: var(--text);
+    }
+    .correction-row input[type="text"]:focus {
+      outline: none;
+      border-color: var(--su-mid);
+      background: var(--white);
+    }
+    .btn-correct {
+      padding: 0.5rem 1.1rem;
+      background: var(--white);
+      color: var(--su-blue);
+      border: 1.5px solid var(--su-blue);
+      border-radius: 7px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .btn-correct:hover:not(:disabled) { background: var(--su-light); }
+    .btn-correct:disabled { opacity: 0.4; cursor: not-allowed; }
+    .correction-confirm {
+      display: none;
+      font-size: 0.82rem;
+      color: var(--green);
+      font-weight: 600;
+      margin-top: 0.5rem;
+    }
+
+    /* ── Footer ── */
+    .site-footer {
+      text-align: center;
+      padding: 1.5rem 1rem 2rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .site-footer a { color: var(--su-mid); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="site-header">
+  <img src="/static/SU_logotyp_Landscape_1000px.png" alt="Stockholm University" />
+  <div class="site-header-text">
+    <h1>CHiLLER</h1>
+    <p>Calibrated Human-in-the-Loop Short-Answer Grading with Grounded Feedback</p>
+  </div>
+</header>
+
+<!-- Status bar -->
+<div class="status-bar">
+  <div class="status-dot" id="statusDot"></div>
+  <span id="statusText">Checking model status …</span>
+</div>
+
+<!-- Main -->
+<main class="main">
+
+  <div class="intro">
+    <h2>How it works</h2>
+    <p>
+      A fine-tuned language model grades student responses and emits a temperature-scaled
+      confidence score. High-confidence predictions are auto-graded; low-confidence ones
+      are flagged for human review. Attribution highlights the answer tokens that most
+      influenced the grade.
+    </p>
+  </div>
+
+  <!-- Examples -->
+  <div class="examples">
+    <span class="examples-label">Examples:</span>
+    <button class="ex-btn" onclick="loadExample(0)">Bagging</button>
+    <button class="ex-btn" onclick="loadExample(1)">K-Means</button>
+    <button class="ex-btn" onclick="loadExample(2)">Silhouette</button>
+    <button class="ex-btn" onclick="loadExample(3)">Seasonality</button>
+    <button class="ex-btn" onclick="loadExample(4)">Nested CV</button>
+  </div>
+
+  <!-- Workspace: single column until attribution/feedback slides in the evidence column -->
+  <div class="workspace" id="workspace">
+
+   <div class="col col-left">
+    <!-- Input card -->
+    <div class="card">
+      <div style="margin-bottom:1rem;">
+        <label for="question">Question</label>
+        <textarea id="question" rows="4" maxlength="3000" placeholder="Enter the exam question ..."></textarea>
+      </div>
+      <div style="margin-bottom:1rem;">
+        <label for="response">Student Response</label>
+        <textarea id="response" rows="3" maxlength="3000" placeholder="Enter the student's answer ..."></textarea>
+      </div>
+      <div class="row">
+        <div>
+          <label for="max_grade">Maximum Grade</label>
+          <input type="number" id="max_grade" value="5" min="1" max="20" />
+        </div>
+        <div class="slider-wrap">
+          <label>Acceptance Threshold (τ): <strong id="tau_val">0.50</strong></label>
+          <input type="range" id="tau" min="0.3" max="0.99" step="0.01" value="0.50"
+                 oninput="document.getElementById('tau_val').textContent=parseFloat(this.value).toFixed(2)" />
+          <div class="slider-ticks"><span>0.30</span><span>0.99</span></div>
+        </div>
+      </div>
+      <button class="btn-primary" id="gradeBtn" onclick="submitGrade()" disabled>
+        Grade
+      </button>
+      <div class="error-msg" id="errorMsg"></div>
+    </div>
+
+    <!-- Spinner -->
+    <div class="spinner" id="spinner">
+      <span class="spin-ring"></span>
+      Loading model and running inference. This may take a minute on first request.
+    </div>
+
+    <!-- Results card: verdict + buttons + correction -->
+    <div class="card results" id="results">
+      <div class="result-grid">
+        <div class="result-box">
+          <div class="val" id="res_grade">-</div>
+          <div class="lbl">Predicted Grade</div>
+        </div>
+        <div class="result-box">
+          <div class="val" id="res_conf">-</div>
+          <div class="lbl">Confidence</div>
+          <div class="conf-bar-wrap">
+            <div class="conf-bar" id="conf_bar" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="decision" id="decision"></div>
+
+      <!-- Action buttons — clicking either slides in the evidence column -->
+      <div class="action-row" id="actionRow">
+        <button class="btn-secondary" id="attrBtn" onclick="fetchAttribution()">
+          View Attribution
+        </button>
+        <button class="btn-secondary" id="feedbackBtn" onclick="fetchFeedback()">
+          Get Feedback
+        </button>
+      </div>
+
+      <!-- Correction widget -->
+      <div class="correction-box" id="correctionBox" style="display:none;">
+        <div class="correction-label">Correct this grade</div>
+        <div class="correction-row">
+          <input type="number" id="humanGrade" min="0" max="20" placeholder="Grade" />
+          <input type="text"   id="corrComment" placeholder="Optional comment …" maxlength="500" />
+          <button class="btn-correct" id="correctBtn" onclick="submitCorrection()">Submit</button>
+        </div>
+        <div class="correction-confirm" id="correctionConfirm">Correction saved. Thank you.</div>
+      </div>
+    </div>
+   </div>
+
+   <!-- Evidence column: collapsed until attribution/feedback is requested, then slides in -->
+   <div class="col col-right" id="evidenceCol">
+    <!-- Attribution panel -->
+    <div class="panel attr" id="attrPanel">
+      <div class="panel-label">
+        Token Attribution
+        <span class="panel-sub">Gradient × Input: tokens most influential to this grade</span>
+      </div>
+      <div id="attrContent"></div>
+      <div class="attr-legend">
+        <span>Low</span><div class="bar"></div><span>High attribution</span>
+      </div>
+    </div>
+
+    <!-- Feedback panel -->
+    <div class="panel feedback" id="feedbackPanel">
+      <div class="panel-label">Model Feedback<span class="fb-badge" id="fbBadge"></span>
+        <span class="panel-sub">AI-generated, grounded in course material — for the teacher to review, not a verified grade rationale</span>
+      </div>
+      <div class="fb-text" id="feedbackContent"></div>
+      <div id="feedbackSources"></div>
+    </div>
+   </div>
+
+  </div>
+
+
+</main>
+
+<footer class="site-footer">
+  CHiLLER · <a href="https://dsv.su.se" target="_blank">DSV, Stockholm University</a> ·
+  research prototype, not for production grading
+</footer>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let _lastGrade   = null;   // { question, response, max_grade, grade, prompt }
+let _attrDone    = false;
+let _feedbackDone = false;
+
+// ── Health polling ─────────────────────────────────────────────────────────────
+async function pollHealth() {
+  try {
+    const res  = await fetch("/status");
+    const data = await res.json();
+    const dot  = document.getElementById("statusDot");
+    const txt  = document.getElementById("statusText");
+    const btn  = document.getElementById("gradeBtn");
+
+    if (data.gpu_busy) {
+      dot.className   = "status-dot busy";
+      txt.textContent = "Model is busy with another request. You can still submit and it will queue.";
+    } else if (data.model === "ready") {
+      dot.className   = "status-dot ready";
+      txt.textContent = "Model loaded on GPU, ready to grade.";
+    } else {
+      dot.className   = "status-dot shadow";
+      txt.textContent = "Shadow mode: model loads on first request (about 30 s).";
+    }
+    btn.disabled = false;
+  } catch {
+    const dot = document.getElementById("statusDot");
+    dot.className    = "status-dot busy";
+    document.getElementById("statusText").textContent = "Server not reachable.";
+  }
+  setTimeout(pollHealth, 60000);
+}
+pollHealth();
+
+// ── Examples ──────────────────────────────────────────────────────────────────
+// Author-written example answers (no real student data). Behaviour verified against the model:
+// a confident correct answer auto-grades; the silhouette answer is subtly wrong and routes to review.
+const EXAMPLES = [
+  {
+    question: "Explain how bagging reduces the variance of a model like a decision tree.",
+    response:  "Bagging trains each tree on its own bootstrap sample drawn with replacement, then averages their predictions. Because the samples differ, the trees make partly independent errors, so averaging them cancels much of the variance, which is why bagging helps unstable high-variance models like decision trees.",
+    max_grade: 3
+  },
+  {
+    question: "Describe the K-means clustering algorithm and one of its limitations.",
+    response:  "K-means repeatedly assigns each point to its nearest centroid and then moves each centroid to the mean of the points assigned to it, iterating until the assignments no longer change. A key limitation is that it can converge to a poor clustering when the initial centroids are badly placed.",
+    max_grade: 3
+  },
+  {
+    question: "What does the silhouette value measure and what range does it take?",
+    response:  "The silhouette value measures how well a point fits its cluster and ranges from -1 to 1, where values closer to 1 are worse because the point is far from everything.",
+    max_grade: 3
+  },
+  {
+    question: "Why is seasonality important in time series forecasting and how can it be detected?",
+    response:  "Seasonality matters because the data repeats over regular periods, and you can deal with it by picking a model that handles those repeats.",
+    max_grade: 3
+  },
+  {
+    question: "Explain why nested cross-validation is used instead of a single cross-validation loop.",
+    response:  "Nested cross-validation uses two loops so that choosing the model does not leak into how it is evaluated.",
+    max_grade: 3
+  }
+];
+
+function loadExample(i) {
+  const ex = EXAMPLES[i];
+  document.getElementById("question").value  = ex.question;
+  document.getElementById("response").value  = ex.response;
+  document.getElementById("max_grade").value = ex.max_grade;
+  resetResults();
+}
+
+// ── Grade ─────────────────────────────────────────────────────────────────────
+async function submitGrade() {
+  const question  = document.getElementById("question").value.trim();
+  const response  = document.getElementById("response").value.trim();
+  const max_grade = parseInt(document.getElementById("max_grade").value);
+  const tau       = parseFloat(document.getElementById("tau").value);
+
+  if (!question || !response) {
+    showError("Please enter both a question and a student response.");
+    return;
+  }
+
+  resetResults();
+  setLoading(true);
+
+  try {
+    const res = await fetch("/grade", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ question, response, max_grade, temperature: 4.0, tau }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        res.status === 503
+          ? "GPU is busy or out of memory. Please wait a moment and try again."
+          : err.detail || `Server error (${res.status})`
+      );
+    }
+
+    const data = await res.json();
+    _lastGrade = { question, response, max_grade, grade: data.predicted_grade, prompt: data.prompt };
+    showResults(data, tau);
+
+  } catch (e) {
+    showError(e.message || "Request failed. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── Attribution ───────────────────────────────────────────────────────────────
+async function fetchAttribution() {
+  if (!_lastGrade || _attrDone) return;
+  const btn = document.getElementById("attrBtn");
+  btn.disabled  = true;
+  btn.innerHTML = '<span class="spin-ring" style="width:14px;height:14px;border-width:2px;margin-right:0.3rem;"></span>Computing …';
+
+  try {
+    const res = await fetch("/attribution", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        question:  _lastGrade.question,
+        response:  _lastGrade.response,
+        prompt:    _lastGrade.prompt,
+        grade:     _lastGrade.grade,
+        max_grade: _lastGrade.max_grade,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error (${res.status})`);
+    }
+
+    const data = await res.json();
+    renderAttribution(data.tokens);
+    document.getElementById("attrPanel").style.display = "block";
+    document.getElementById("workspace").classList.add("show-evidence");
+    document.querySelector(".main").classList.add("wide");
+    _attrDone = true;
+    btn.innerHTML = "Attribution shown";
+
+  } catch (e) {
+    btn.disabled  = false;
+    btn.innerHTML = "View Attribution";
+    showError(e.message || "Attribution failed.");
+  }
+}
+
+function renderAttribution(tokens) {
+  const scores = tokens.map(t => t[1]);
+  const maxS   = Math.max(...scores, 1e-9);
+  const esc    = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const html   = tokens.map(([tok, s]) => {
+    const t  = s / maxS;
+    const r  = 255;
+    const g  = Math.round(255 * (1 - t * 0.85));
+    const b  = Math.round(255 * (1 - t));
+    const op = (0.2 + 0.8 * t).toFixed(2);
+    return `<span class="attr-tok" style="background:rgb(${r},${g},${b});opacity:${op};" title="score: ${s.toFixed(4)}">${esc(tok)} </span>`;
+  }).join("");
+  document.getElementById("attrContent").innerHTML = html;
+}
+
+// ── Feedback ──────────────────────────────────────────────────────────────────
+async function fetchFeedback() {
+  if (!_lastGrade || _feedbackDone) return;
+  const btn = document.getElementById("feedbackBtn");
+  btn.disabled  = true;
+  btn.innerHTML = '<span class="spin-ring" style="width:14px;height:14px;border-width:2px;margin-right:0.3rem;"></span>Generating …';
+
+  try {
+    const res = await fetch("/feedback", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        question:  _lastGrade.question,
+        response:  _lastGrade.response,
+        grade:     _lastGrade.grade,
+        max_grade: _lastGrade.max_grade,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error (${res.status})`);
+    }
+
+    const data = await res.json();
+    renderFeedback(data);
+    document.getElementById("feedbackPanel").style.display = "block";
+    document.getElementById("workspace").classList.add("show-evidence");
+    document.querySelector(".main").classList.add("wide");
+    _feedbackDone = true;
+    btn.innerHTML = "Feedback shown";
+
+  } catch (e) {
+    btn.disabled  = false;
+    btn.innerHTML = "Get Feedback";
+    showError(e.message || "Feedback generation failed.");
+  }
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function renderFeedback(data) {
+  const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  const badge = document.getElementById("fbBadge");
+  badge.className   = "fb-badge " + (data.grounded ? "grounded" : "ungrounded");
+  badge.textContent = data.grounded ? "Grounded in lectures" : "General (no lecture match)";
+
+  // Turn [label] (and [a, b] groups) in the feedback text into citation chips.
+  const html = esc(data.feedback).replace(/\[([^\]]+)\]/g, (m, grp) =>
+    grp.split(",").map(x => `<span class="cite-chip">${esc(x.trim())}</span>`).join(" "));
+  document.getElementById("feedbackContent").innerHTML = html;
+
+  // Lecture excerpts: show the cited ones prominently; fall back to all retrieved if none cited.
+  const box = document.getElementById("feedbackSources");
+  const ex  = data.excerpts || [];
+  if (!data.grounded || ex.length === 0) {
+    box.innerHTML = data.grounded ? "" :
+      `<div class="sources-head" style="color:var(--amber)">No sufficiently relevant lecture material ` +
+      `(top similarity ${Number(data.top_score || 0).toFixed(2)} below the 0.35 grounding threshold) — ` +
+      `general feedback, not grounded in lectures, so no citations are shown.</div>`;
+    return;
+  }
+  const cited = ex.filter(e => e.cited);
+  const shown = cited.length ? cited : ex;
+  box.innerHTML =
+    `<div class="sources-head">Lecture sources ${cited.length ? "cited" : "retrieved"}</div>` +
+    shown.map(e => `
+      <div class="excerpt ${e.cited ? "cited" : "dim"}">
+        <span class="ex-label">${esc(e.label)}<span class="ex-score">sim ${Number(e.score).toFixed(2)}</span></span>
+        <div class="ex-text">${esc(e.text.slice(0, 320))}${e.text.length > 320 ? "…" : ""}</div>
+      </div>`).join("");
+}
+
+function showResults(data, tau) {
+  const confPct = (data.confidence * 100).toFixed(1) + "%";
+  document.getElementById("res_grade").textContent = `${data.predicted_grade} / ${data.max_grade}`;
+  document.getElementById("res_conf").textContent  = confPct;
+  document.getElementById("conf_bar").style.width  = confPct;
+
+  const dec = document.getElementById("decision");
+  if (data.accepted) {
+    dec.className   = "decision accepted";
+    dec.textContent = `Auto-graded — confidence ${confPct} is at or above τ = ${tau.toFixed(2)}`;
+  } else {
+    dec.className   = "decision flagged";
+    dec.textContent = `Routed to the teacher for review — confidence ${confPct} is below τ = ${tau.toFixed(2)}`;
+  }
+  document.getElementById("actionRow").style.display = "flex";
+
+  // Pre-fill correction input and show widget
+  document.getElementById("humanGrade").value  = data.predicted_grade;
+  document.getElementById("humanGrade").max    = data.max_grade;
+  document.getElementById("corrComment").value = "";
+  document.getElementById("correctionConfirm").style.display = "none";
+  document.getElementById("correctBtn").disabled = false;
+  document.getElementById("correctBtn").textContent = "Submit";
+  document.getElementById("correctionBox").style.display = "block";
+
+  document.getElementById("results").style.display = "block";
+}
+
+async function submitCorrection() {
+  if (!_lastGrade) return;
+  const humanGrade = parseInt(document.getElementById("humanGrade").value);
+  const comment    = document.getElementById("corrComment").value.trim();
+  const btn        = document.getElementById("correctBtn");
+
+  if (isNaN(humanGrade) || humanGrade < 0 || humanGrade > _lastGrade.max_grade) {
+    showError(`Grade must be between 0 and ${_lastGrade.max_grade}.`);
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = "Saving …";
+
+  try {
+    const res = await fetch("/correct", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        question:        _lastGrade.question,
+        response:        _lastGrade.response,
+        max_grade:       _lastGrade.max_grade,
+        predicted_grade: _lastGrade.grade,
+        human_grade:     humanGrade,
+        comment,
+      }),
+    });
+    if (!res.ok) throw new Error(`Server error (${res.status})`);
+    btn.textContent = "Submitted";
+    document.getElementById("correctionConfirm").style.display = "block";
+  } catch {
+    btn.disabled    = false;
+    btn.textContent = "Submit";
+    showError("Failed to save correction. Please try again.");
+  }
+}
+
+function resetResults() {
+  _lastGrade = null; _attrDone = false; _feedbackDone = false;
+  document.getElementById("results").style.display       = "none";
+  document.getElementById("attrPanel").style.display     = "none";
+  document.getElementById("feedbackPanel").style.display = "none";
+  document.getElementById("actionRow").style.display     = "none";
+  document.getElementById("workspace").classList.remove("show-evidence");
+  document.querySelector(".main").classList.remove("wide");
+  document.getElementById("correctionBox").style.display = "none";
+  document.getElementById("errorMsg").style.display      = "none";
+  document.getElementById("attrBtn").disabled      = false;
+  document.getElementById("attrBtn").innerHTML     = "View Attribution";
+  document.getElementById("feedbackBtn").disabled  = false;
+  document.getElementById("feedbackBtn").innerHTML = "Get Feedback";
+}
+
+function showError(msg) {
+  const el = document.getElementById("errorMsg");
+  el.textContent   = msg;
+  el.style.display = "block";
+}
+
+function setLoading(on) {
+  const btn = document.getElementById("gradeBtn");
+  btn.disabled    = on;
+  btn.textContent = on ? "Grading …" : "Grade";
+  document.getElementById("spinner").style.display = on ? "block" : "none";
+}
+
+</script>
+</body>
+</html>
