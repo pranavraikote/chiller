@@ -179,16 +179,20 @@ def _ungrounded(question, response, grade, max_grade, top_score=0.0):
     return {"feedback": text, "grounded": False, "top_score": round(top_score, 3), "excerpts": []}
 
 
-def _generate_feedback(question: str, response: str, grade: int, max_grade: int) -> dict:
+def _generate_feedback(question: str, response: str, grade: int, max_grade: int,
+                       corpus: str = None) -> dict:
     """Grounded feedback: retrieve lecture excerpts, generate cited feedback, mark which were cited.
+
+    `corpus` picks which configured corpus (RAG_CORPORA) to ground in; None → RAG_DEFAULT.
 
     Abstains to ungrounded feedback (no citations) when nothing is sufficiently relevant, so the
     model can't fabricate citations for material the corpus doesn't cover.
     """
-    if not USE_RAG or mgr.retriever is None:
+    retriever = mgr.get_retriever(corpus)
+    if not USE_RAG or retriever is None:
         return _ungrounded(question, response, grade, max_grade)
 
-    chunks    = mgr.retriever.retrieve(f"{question} {response}", top_k=RAG_TOP_K)
+    chunks    = retriever.retrieve(f"{question} {response}", top_k=RAG_TOP_K)
     top_score = max((sc for _, _, sc in chunks), default=0.0)
     if top_score < RAG_MIN_SCORE:
         return _ungrounded(question, response, grade, max_grade, top_score)

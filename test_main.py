@@ -79,8 +79,49 @@ def test_grade_response_schema():
 
 
 def test_grade_busy_returns_503():
-    with patch.object(main._gpu_sem, "locked", return_value=True):
+    # A full queue (max waiters already in line) rejects fast with a 503.
+    with patch.object(main, "_gpu_waiters", main._GPU_MAX_WAITERS):
         assert client.post("/grade", json=_GRADE).status_code == 503
+
+
+def test_grade_queues_then_times_out():
+    # While the GPU is held, a request waits in line (not an instant 503) and only gives up
+    # with a 503 after _GPU_WAIT_TIMEOUT; the queue counter is released either way.
+    import asyncio, time
+    async def _held():
+        await asyncio.sleep(10)
+    with patch.object(main._gpu_sem, "acquire", _held), patch.object(main, "_GPU_WAIT_TIMEOUT", 0.3):
+        t0 = time.monotonic()
+        r = client.post("/grade", json=_GRADE)
+    assert r.status_code == 503
+    assert time.monotonic() - t0 >= 0.3
+    assert main._gpu_waiters == 0
+
+
+def test_grade_waits_for_gpu_then_succeeds():
+    import asyncio
+    real_acquire = main._gpu_sem.acquire
+    async def _slow():
+        await asyncio.sleep(0.2)   # GPU frees up after a short wait
+        return await real_acquire()
+    scores = [0.0, 5.0, 0.0, 0.0, 0.0, 0.0]
+    with patch.object(main._gpu_sem, "acquire", _slow), \
+         patch("main._score", side_effect=scores), patch("main._log"):
+        r = client.post("/grade", json=_GRADE)
+    assert r.status_code == 200
+    assert r.json()["predicted_grade"] == 1
+    assert not main._gpu_sem.locked() and main._gpu_waiters == 0
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_grade_log_inputs_toggle(enabled):
+    scores = [0.0, 0.0, 0.0, 5.0, 0.0, 0.0]
+    with patch("main.LOG_INPUTS", enabled), patch("main._score", side_effect=scores), \
+         patch("main._log") as log_:
+        assert client.post("/grade", json=_GRADE).status_code == 200
+    entry = log_.call_args.args[0]
+    assert ("question" in entry and "response" in entry) is enabled
+    assert entry["predicted_grade"] == 3
 
 
 # ── Attribution ───────────────────────────────────────────────────────────────
@@ -111,6 +152,21 @@ def test_feedback_returns_text():
     assert body["feedback"] == fb["feedback"]
     assert body["grounded"] is True
     assert body["excerpts"][0]["label"] == "DAMI_2021_L10"
+
+
+def test_feedback_corpus_selection_falls_back_to_default():
+    fb = {"feedback": "ok", "grounded": False, "top_score": 0.0, "excerpts": []}
+    corpora = {"default": "rag", "course_b": "rag_b"}
+    for sent, expected in (("course_b", "course_b"), ("unknown", "default"), (None, "default")):
+        with patch("main.RAG_CORPORA", corpora), patch("main.RAG_DEFAULT", "default"), \
+             patch("main._generate_feedback", return_value=fb) as gen, \
+             patch("main.mgr.ensure_retriever") as ens, patch("main._log"):
+            r = client.post("/feedback", json={
+                "question": "Q", "response": "A", "grade": 1, "max_grade": 2, "corpus": sent,
+            })
+        assert r.status_code == 200
+        ens.assert_called_once_with(expected)
+        assert gen.call_args.args[-1] == expected
 
 
 # ── LaTeX stripping ─────────────────────────────────────────────────────────────

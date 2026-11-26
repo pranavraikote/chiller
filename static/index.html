@@ -339,6 +339,29 @@
       flex-wrap: wrap;
       margin-top: 0.4rem;
     }
+    .corpus-select {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.45rem 2rem 0.45rem 1rem;
+      background-color: var(--white);
+      color: var(--su-mid);
+      border: 1.5px solid var(--su-mid);
+      border-radius: 7px;
+      font-family: inherit;
+      font-size: 0.84rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      /* custom caret in the same ink as the buttons */
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%232563A8' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.7rem center;
+    }
+    .corpus-select:hover { background-color: var(--su-light); }
+    .corpus-select:focus { outline: none; }
 
     /* ── Attribution panel ── */
     .panel {
@@ -603,6 +626,9 @@
         <button class="btn-secondary" id="feedbackBtn" onclick="fetchFeedback()">
           Get Feedback
         </button>
+        <!-- Corpus picker: filled from /status; hidden unless more than one corpus is configured -->
+        <select class="corpus-select" id="corpusSelect" title="Corpus used to ground feedback"
+                style="display:none;"></select>
       </div>
 
       <!-- Correction widget -->
@@ -678,6 +704,7 @@ async function pollHealth() {
       txt.textContent = "Shadow mode: model loads on first request (about 30 s).";
     }
     btn.disabled = false;
+    renderCorpora(data.corpora || [], data.default_corpus);
   } catch {
     const dot = document.getElementById("statusDot");
     dot.className    = "status-dot busy";
@@ -686,6 +713,14 @@ async function pollHealth() {
   setTimeout(pollHealth, 60000);
 }
 pollHealth();
+
+// Populate the corpus picker once from the server's RAG_CORPORA; shown only for 2+ corpora.
+function renderCorpora(names, def) {
+  const sel = document.getElementById("corpusSelect");
+  if (sel.options.length || names.length < 2) return;
+  for (const n of names) sel.add(new Option(n, n, false, n === def));
+  sel.style.display = "";
+}
 
 // ── Examples ──────────────────────────────────────────────────────────────────
 // Author-written example answers (no real student data). Behaviour verified against the model:
@@ -839,6 +874,7 @@ async function fetchFeedback() {
         response:  _lastGrade.response,
         grade:     _lastGrade.grade,
         max_grade: _lastGrade.max_grade,
+        corpus:    document.getElementById("corpusSelect").value || null,
       }),
     });
 

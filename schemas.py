@@ -47,6 +47,7 @@ class FeedbackRequest(BaseModel):
     response:  str = Field(..., max_length=MAX_FIELD)
     grade:     int
     max_grade: int = Field(..., ge=1, le=20)
+    corpus:    str | None = None   # which configured corpus to ground in; None → RAG_DEFAULT
 
 
 class FeedbackResponse(BaseModel):

@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from config import FEEDBACK_MODEL, IDLE_TIMEOUT, LOG_DIR
+from config import FEEDBACK_MODEL, IDLE_TIMEOUT, LOG_DIR, LOG_INPUTS, RAG_CORPORA, RAG_DEFAULT
 from feedback_proc import fb_mgr
 from logging_setup import _log, log
 from models import mgr
@@ -31,8 +31,12 @@ from schemas import (
 
 app = FastAPI(title="CHiLLER")
 
-# One GPU inference at a time — others get an immediate 503
+# One GPU inference at a time. Overlapping requests queue (bounded) and wait their turn
+# rather than being rejected outright — a short wait beats a 503.
 _gpu_sem = asyncio.Semaphore(1)
+_GPU_WAIT_TIMEOUT = 60    # max seconds a queued request waits for the GPU before giving up (503)
+_GPU_MAX_WAITERS  = 32    # hard cap on the queue depth; past this, fail fast with a 503
+_gpu_waiters = 0
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,16 +66,30 @@ async def require_model() -> None:
 
 
 async def _run_locked(fn, *args) -> Any:
-    """Busy-check + one-at-a-time GPU semaphore + thread-pool offload.
+    """One-at-a-time GPU access with a bounded wait + thread-pool offload.
+
+    Overlapping requests queue on the semaphore and wait up to _GPU_WAIT_TIMEOUT
+    for their turn; only a full queue (_GPU_MAX_WAITERS) or a timed-out wait yields
+    a 503.
 
     Deliberately does NOT call require_model() — that stays a per-route
     Depends(require_model) so test_main.py's dependency_overrides keep working.
     """
-    if _gpu_sem.locked():
+    global _gpu_waiters
+    if _gpu_waiters >= _GPU_MAX_WAITERS:
         _busy_503()
-    async with _gpu_sem:
+    _gpu_waiters += 1
+    try:
+        await asyncio.wait_for(_gpu_sem.acquire(), timeout=_GPU_WAIT_TIMEOUT)
+    except asyncio.TimeoutError:
+        _busy_503()
+    finally:
+        _gpu_waiters -= 1
+    try:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, fn, *args)
+    finally:
+        _gpu_sem.release()
 
 
 # ── Sync inference workers (run in thread pool) ───────────────────────────────
@@ -100,14 +118,16 @@ def _run_grade(req: GradeRequest) -> GradeResponse:
         pred, conf, prompt = _grade_core(req.question, req.response, M, req.temperature)
         mgr.touch()
 
-        _log({
+        entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "event": "grade",
-            "question": req.question, "response": req.response,
             "max_grade": M, "predicted_grade": pred,
             "confidence": round(conf, 4), "accepted": conf >= req.tau,
             "tau": req.tau, "temperature": req.temperature,
-        })
+        }
+        if LOG_INPUTS:
+            entry["question"], entry["response"] = req.question, req.response
+        _log(entry)
 
     except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
         log.error(f"OOM during grading: {e}")
@@ -136,18 +156,21 @@ def _run_attribution(req: AttributionRequest) -> AttributionResponse:
 
 def _run_feedback(req: FeedbackRequest) -> FeedbackResponse:
     try:
-        mgr.ensure_retriever()
-        r = _generate_feedback(req.question, req.response, req.grade, req.max_grade)
+        corpus = req.corpus if req.corpus in RAG_CORPORA else RAG_DEFAULT
+        mgr.ensure_retriever(corpus)
+        r = _generate_feedback(req.question, req.response, req.grade, req.max_grade, corpus)
         mgr.touch()
-        _log({
+        entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "event": "feedback",
-            "question": req.question, "response": req.response,
             "grade": req.grade, "max_grade": req.max_grade,
-            "feedback": r["feedback"], "grounded": r["grounded"],
+            "feedback": r["feedback"], "grounded": r["grounded"], "corpus": corpus,
             "top_score": r["top_score"],
             "cited": [e["label"] for e in r["excerpts"] if e["cited"]],
-        })
+        }
+        if LOG_INPUTS:
+            entry["question"], entry["response"] = req.question, req.response
+        _log(entry)
     except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
         log.error(f"OOM during feedback: {e}")
         mgr.offload()
@@ -188,6 +211,8 @@ def status():
         "feedback_model":  FEEDBACK_MODEL or "grader-base",
         "feedback_loaded": fb_mgr.loaded,
         "feedback_gpu":    fb_mgr.gpu if fb_mgr.loaded else None,
+        "corpora":         list(RAG_CORPORA),
+        "default_corpus":  RAG_DEFAULT,
     }
 
 

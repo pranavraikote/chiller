@@ -33,15 +33,24 @@ ADAPTER_DIR = os.environ.get("ADAPTER_DIR", "adapter")
 
 # ── Server ─────────────────────────────────────────────────────────────────────
 IDLE_TIMEOUT = int(os.environ.get("IDLE_TIMEOUT", "300"))
+# Also log the question + student answer with each grade/feedback event (e.g. to collect training
+# data). Off by default since it is personal data; set LOG_INPUTS=1 to enable. Teacher corrections
+# (/correct) always include them — that record is the point of a correction.
+LOG_INPUTS   = os.environ.get("LOG_INPUTS", "0") != "0"
 LOG_FILE     = os.environ.get("LOG_FILE", "logs/grades.jsonl")
 LOG_DIR      = Path(LOG_FILE).parent
 MAX_FIELD    = int(os.environ.get("MAX_FIELD_CHARS", "3000"))
 
 # ── RAG grounded feedback ───────────────────────────────────────────────────────
-# RAG_DIR must hold chunks.faiss_index + chunks.json (a lecture/reference corpus). Default ./rag.
+# A corpus is a directory holding chunks.faiss_index + chunks.json (a lecture/reference corpus).
+# RAG_DIR is the single default corpus (./rag). For several, set RAG_CORPORA="name=/dir,name2=/dir2";
+# the names are what the UI/API send as `corpus`. RAG_DEFAULT (else the first listed) is used when a
+# request names no corpus or an unknown one.
 RAG_DIR       = os.environ.get("RAG_DIR", "rag")
-RAG_INDEX     = os.environ.get("RAG_INDEX",  f"{RAG_DIR}/chunks.faiss_index")
-RAG_CHUNKS    = os.environ.get("RAG_CHUNKS", f"{RAG_DIR}/chunks.json")
+RAG_CORPORA   = dict(
+    p.split("=", 1) for p in os.environ.get("RAG_CORPORA", f"default={RAG_DIR}").split(",") if "=" in p
+) or {"default": RAG_DIR}
+RAG_DEFAULT   = os.environ.get("RAG_DEFAULT", next(iter(RAG_CORPORA)))
 EMBED_MODEL   = os.environ.get("EMBED_MODEL", "sentence-transformers/all-mpnet-base-v2")
 USE_RAG       = os.environ.get("USE_RAG", "1") != "0"
 RAG_TOP_K     = int(os.environ.get("RAG_TOP_K", "5"))

@@ -15,7 +15,7 @@ from peft import PeftModel
 
 from config import (
     ADAPTER_DIR, BASE_MODEL, EMBED_MODEL, FEEDBACK_GPU, FEEDBACK_MODEL,
-    GRADER_GPU, IDLE_TIMEOUT, RAG_CHUNKS, RAG_INDEX, USE_RAG,
+    GRADER_GPU, IDLE_TIMEOUT, RAG_CORPORA, RAG_DEFAULT, USE_RAG,
 )
 from gpu import _load_balanced
 from logging_setup import log
@@ -102,26 +102,38 @@ class ModelManager(_LazyModel):
     def __init__(self):
         super().__init__()
         self.gpu = GRADER_GPU               # so even a pre-load cleanup never targets GPU 0
-        self.retriever: Any = None          # resident (CPU) — not offloaded with the model
+        self.retrievers: dict = {}          # name -> LectureRetriever (lazy, resident CPU)
+        self._embedder: Any = None          # one embedder shared across corpora
         self._rag_lock = threading.Lock()
 
-    def ensure_retriever(self):
-        """Lazy-load the lecture retriever once; kept resident across model offloads.
+    def ensure_retriever(self, name: str = None):
+        """Lazy-load the named lecture corpus once; kept resident across model offloads.
 
-        On failure, leaves retriever=None so feedback degrades gracefully to ungrounded.
+        Each corpus (RAG_CORPORA) loads its own FAISS index but shares a single CPU embedder.
+        On failure the corpus is simply absent, so feedback degrades gracefully to ungrounded.
         """
-        if not USE_RAG or self.retriever is not None:
+        name = name or RAG_DEFAULT
+        if not USE_RAG or name not in RAG_CORPORA or name in self.retrievers:
             return
         with self._rag_lock:
-            if self.retriever is not None:
+            if name in self.retrievers:
                 return
-            log.info("Loading lecture retriever (FAISS + embedder, CPU) …")
+            d = RAG_CORPORA[name]
+            log.info(f"Loading lecture retriever '{name}' (FAISS + shared embedder, CPU) …")
             try:
-                self.retriever = LectureRetriever(RAG_INDEX, RAG_CHUNKS, EMBED_MODEL, device="cpu")
-                log.info(f"Retriever ready: {len(self.retriever.chunks)} chunks.")
+                if self._embedder is None:
+                    from sentence_transformers import SentenceTransformer
+                    self._embedder = SentenceTransformer(EMBED_MODEL, device="cpu")
+                r = LectureRetriever(f"{d}/chunks.faiss_index", f"{d}/chunks.json",
+                                     EMBED_MODEL, device="cpu", embedder=self._embedder)
+                self.retrievers[name] = r
+                log.info(f"Retriever '{name}' ready: {len(r.chunks)} chunks.")
             except Exception as e:
-                log.error(f"Retriever load failed ({type(e).__name__}): {e} — feedback stays ungrounded.")
-                self.retriever = None
+                log.error(f"Retriever '{name}' load failed ({type(e).__name__}): {e} — ungrounded.")
+
+    def get_retriever(self, name: str = None):
+        """Return the loaded retriever for `name` (or the default), or None if unavailable."""
+        return self.retrievers.get(name or RAG_DEFAULT)
 
     def _load(self):
         log.info("Loading tokenizer …")
