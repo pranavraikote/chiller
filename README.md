@@ -1,10 +1,22 @@
 # CHiLLER: Calibrated Human-in-the-Loop Short-Answer Grading with Grounded Feedback
 
-**CHiLLER** is an on-premise, **human-in-the-loop** short-answer grading system built on **open-weight
-LLMs**. It combines calibrated **confidence-based routing** — selectively deferring uncertain predictions
-to the teacher — with gradient-based **token attribution** and **retrieval-grounded feedback** from course
-materials. Teachers can inspect predictions, adjust grades, and record corrections for later model
-adaptation. Because it runs entirely on local hardware, student answers never leave the institution.
+[![Paper](https://img.shields.io/badge/Paper-DOI-b31b1b.svg)](https://doi.org/10.1145/3862322.3872125)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
+Pranav Raikote, Korbinian Randl, Ioanna Miliou, Panagiotis Papapetrou · WSDM '27 (Demonstration Track)
+
+## Abstract
+
+Large Language Models (LLMs) offer promising capabilities for automated grading, but their adoption in
+educational assessment raises concerns about grading reliability, transparency, and student data privacy.
+We present CHiLLER, an on-premise, human-in-the-loop grading system built on open-weight LLMs. The system
+combines calibrated confidence-based routing, which selectively defers uncertain predictions to teachers,
+with gradient-based token attribution and retrieval-grounded feedback from course materials. Teachers can
+inspect predictions, adjust grades, and provide corrections for subsequent model adaptation. Evaluated on
+180 held-out student answers, the system **routes only 16.1% of answers for human review while capturing
+75% of large grading errors**. By integrating selective grading, explainability, and source-grounded
+feedback in a locally deployable architecture, CHiLLER offers a practical approach to AI-assisted
+assessment that preserves teacher oversight and avoids transmitting student data to external providers.
 
 This repository is the interactive grading server (FastAPI + a browser UI) demonstrated in our WSDM '27
 paper; the full training, adaptation, and calibration pipeline is described there. It is a **research
@@ -50,17 +62,20 @@ In our evaluation on 180 held-out answers, at `τ = 0.50` the system routes **16
 teacher while capturing **75% (9/12)** of the large grading errors (deviations of ≥ 2 marks) — review
 effort concentrates on the answers the grader is least sure about. See the paper for the full tables.
 
-## Ingredients
+## Quickstart
+
+**Requirements**
 
 - A CUDA GPU (~16 GB is enough for the 7B grader in bf16; a second GPU is optional, for the 14B feedback model).
 - Python 3.10+ and PyTorch (install the build matching your CUDA).
 - A **LoRA adapter** for the grader (see *Providing a model* below).
 - *(Optional)* A **reference corpus** for grounded feedback (`chunks.faiss_index` + `chunks.json`).
 
-## Recipe
+**Install and run**
 
 ```bash
-# 1. Install
+# 1. Clone and install
+git clone https://github.com/pranavraikote/chiller.git && cd chiller
 pip install -r requirements.txt          # add requirements-dev.txt to run the tests
 
 # 2. Put a LoRA adapter at ./adapter  (or set ADAPTER_DIR=/path/to/adapter)
@@ -92,8 +107,9 @@ docker run -d --gpus all -p 127.0.0.1:8080:8080 \
 
 `BASE_MODEL` is pulled from the Hugging Face Hub; `ADAPTER_DIR` must point at a **LoRA adapter** that
 fine-tunes the base model to score the grade candidates well. As in the paper, such an adapter is trained
-on graded answers and further adapted to a teacher-graded seed batch of the target examination. Train your
-own, or use a released adapter. *(Adapter + corpus download: TBD.)*
+on graded answers and further adapted to a teacher-graded seed batch of the target examination. The
+adapter used in the paper is **not released**, because it was trained on sensitive student data, so you
+need to train your own on graded answers from your course.
 
 ## Configuration
 
@@ -152,6 +168,25 @@ pytest test_main.py        # fully mocked, no GPU required
 - Attribution is most informative on the *uncertain* answers — a very confident grade saturates to a flat
   map, which is fine, since those are the answers the human does not need to inspect.
 - The base model and any adapter carry their **own licenses** (e.g. the Qwen license); comply with them.
+
+## Reproducing Results
+
+The numbers reported in the paper come from the training, adaptation, and calibration pipeline described
+there; this repository is the interactive system that the paper demonstrates.
+
+## Citation
+
+```bibtex
+@inproceedings{raikote2027chiller,
+  title     = "{CHiLLER}: Calibrated Human-in-the-Loop Short-Answer Grading with Grounded Feedback",
+  author    = {Raikote, Pranav and Randl, Korbinian and Miliou, Ioanna and Papapetrou, Panagiotis},
+  booktitle = {Proceedings of the Twentieth ACM International Conference on Web Search and Data Mining (WSDM '27)},
+  year      = {2027},
+  address   = {Hong Kong, Hong Kong},
+  publisher = {ACM},
+  doi       = {10.1145/3862322.3872125}
+}
+```
 
 ## License
 
