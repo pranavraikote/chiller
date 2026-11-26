@@ -15,13 +15,17 @@ class LectureRetriever:
     """
 
     def __init__(self, index_path, chunks_path,
-                 embed_model="sentence-transformers/all-mpnet-base-v2", device="cpu"):
+                 embed_model="sentence-transformers/all-mpnet-base-v2", device="cpu",
+                 embedder=None):
         import faiss
-        from sentence_transformers import SentenceTransformer
         self.index = faiss.read_index(index_path)
         with open(chunks_path, encoding="utf-8") as f:
             self.chunks = json.load(f)
-        self.embedder = SentenceTransformer(embed_model, device=device)
+        if embedder is not None:          # reuse one embedder across multiple corpora
+            self.embedder = embedder
+        else:
+            from sentence_transformers import SentenceTransformer
+            self.embedder = SentenceTransformer(embed_model, device=device)
 
     def retrieve(self, query, top_k=6, min_chars=60, slide_floor=2, transcript_floor=2,
                  unique_labels=False):
