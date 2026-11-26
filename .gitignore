@@ -22,6 +22,7 @@ logs*/
 adapter/
 adapters/
 rag/
+rag_*/
 
 # OS / editor
 .DS_Store

@@ -1,0 +1,38 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the paper below."
+title: "CHiLLER"
+authors:
+  - family-names: "Raikote"
+    given-names: "Pranav"
+  - family-names: "Randl"
+    given-names: "Korbinian"
+  - family-names: "Miliou"
+    given-names: "Ioanna"
+  - family-names: "Papapetrou"
+    given-names: "Panagiotis"
+repository-code: "https://github.com/pranavraikote/chiller"
+license: "Apache-2.0"
+preferred-citation:
+  type: "conference-paper"
+  title: "CHiLLER: Calibrated Human-in-the-Loop Short-Answer Grading with Grounded Feedback"
+  authors:
+    - family-names: "Raikote"
+      given-names: "Pranav"
+    - family-names: "Randl"
+      given-names: "Korbinian"
+    - family-names: "Miliou"
+      given-names: "Ioanna"
+    - family-names: "Papapetrou"
+      given-names: "Panagiotis"
+  year: 2027
+  collection-title: "Proceedings of the Twentieth ACM International Conference on Web Search and Data Mining (WSDM '27)"
+  publisher:
+    name: "ACM"
+  conference:
+    name: "WSDM '27"
+    city: "Hong Kong"
+    country: "HK"
+    date-start: "2027-02-15"
+    date-end: "2027-02-19"
+  doi: "10.1145/3862322.3872125"
+  url: "https://doi.org/10.1145/3862322.3872125"
