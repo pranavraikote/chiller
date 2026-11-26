@@ -1,0 +1,96 @@
+# DSV Data Science Group: release checks
+# Added by /dsv-release-prep. Runs on every push. Fix anything it flags while
+# the repo is still private, before it goes public.
+name: DSV checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: No secrets in the history
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history: a key removed later is still public once the repo is
+      - name: Scan with gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks detect --source . --redact --verbose
+
+  files:
+    name: No large or raw data files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tracked files are under 10 MB
+        run: |
+          limit=$((10 * 1024 * 1024))
+          fail=0
+          while IFS= read -r -d '' f; do
+            [ -f "$f" ] || continue
+            size=$(stat -c %s "$f")
+            if [ "$size" -gt "$limit" ]; then
+              echo "::error file=$f::$f is $((size / 1024 / 1024)) MB (limit 10 MB). Host data and weights elsewhere (e.g. Hugging Face) and fetch them with a script."
+              fail=1
+            fi
+          done < <(git ls-files -z)
+          exit $fail
+      - name: Flag committed data and weight files
+        run: |
+          matches=$(git ls-files | grep -Ei '\.(csv|tsv|parquet|feather|arrow|h5|hdf5|npy|npz|pkl|pickle|pt|pth|ckpt|safetensors|bin|onnx)$' || true)
+          if [ -n "$matches" ]; then
+            echo "::warning::Data or weight files are committed. Fine if they're small samples; raw data and weights belong elsewhere."
+            echo "$matches"
+          fi
+
+  release-files:
+    name: README, citation, and license
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: LICENSE is present
+        run: |
+          if ! ls -1 | grep -qE '^LICEN[CS]E(\.md|\.txt)?$'; then
+            echo "::error::No LICENSE file in the repo root. Use MIT or Apache 2.0 unless otherwise required."
+            exit 1
+          fi
+      - name: README has the standard sections
+        run: |
+          if [ ! -f README.md ]; then
+            echo "::error::No README.md in the repo root."
+            exit 1
+          fi
+          fail=0
+          for section in "Abstract" "Quickstart" "Reproducing Results" "Citation"; do
+            if ! grep -qiE "^#{1,6} .*${section}" README.md; then
+              echo "::error file=README.md::Missing section: ${section}"
+              fail=1
+            fi
+          done
+          if ! grep -qiE 'arxiv\.org|doi\.org|openreview\.net|aclanthology\.org' README.md; then
+            echo "::warning file=README.md::No paper link found (arXiv, DOI, OpenReview, ACL Anthology). Add it once it's available."
+          fi
+          exit $fail
+      - name: CITATION.cff is valid
+        run: |
+          if [ ! -f CITATION.cff ]; then
+            echo "::error::No CITATION.cff in the repo root."
+            exit 1
+          fi
+          pip install --quiet cffconvert==2.0.0
+          cffconvert --validate
+      - name: No leftover template placeholders
+        run: |
+          if grep -nE 'TODO|\{\{' README.md CITATION.cff; then
+            echo "::warning::README.md or CITATION.cff still has TODOs or {{placeholders}} (listed above)."
+          fi
